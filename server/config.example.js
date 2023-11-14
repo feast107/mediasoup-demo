@@ -36,6 +36,8 @@ module.exports =
 		// See https://mediasoup.org/documentation/v3/mediasoup/api/#WorkerSettings
 		workerSettings :
 		{
+			dtlsCertificateFile : process.env.WORKER_CERT_FULLCHAIN,
+			dtlsPrivateKeyFile  : process.env.WORKER_CERT_PRIVKEY,
 			logLevel : 'warn',
 			logTags  :
 			[
@@ -133,7 +135,7 @@ module.exports =
 					announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP,
 					port        : 44444
 				}
-			],
+			]
 		},
 		// mediasoup WebRtcTransport options for WebRTC endpoints (mediasoup-client,
 		// libmediasoupclient).
