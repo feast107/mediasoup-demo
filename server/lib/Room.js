@@ -1,7 +1,10 @@
 const EventEmitter = require('events').EventEmitter;
+const mediasoup = require('mediasoup');
 const protoo = require('protoo-server');
+// const rtp = require('rtp.js');
 const throttle = require('@sitespeed.io/throttle');
 const Logger = require('./Logger');
+const utils = require('./utils');
 const config = require('../config');
 const Bot = require('./Bot');
 
@@ -221,6 +224,10 @@ class Room extends EventEmitter
 		{
 			logger.error('protooRoom.createPeer() failed:%o', error);
 		}
+
+		// Notify mediasoup version to the peer.
+		peer.notify('mediasoup-version', { version: mediasoup.version })
+			.catch(() => {});
 
 		// Use the peer.data object to store mediasoup related objects.
 
@@ -462,16 +469,15 @@ class Room extends EventEmitter
 			{
 				const webRtcTransportOptions =
 				{
-					...config.mediasoup.webRtcTransportOptions,
-					enableSctp     : Boolean(sctpCapabilities),
-					numSctpStreams : (sctpCapabilities || {}).numStreams
+					...utils.clone(config.mediasoup.webRtcTransportOptions),
+					webRtcServer      : this._webRtcServer,
+					iceConsentTimeout : 20,
+					enableSctp        : Boolean(sctpCapabilities),
+					numSctpStreams    : (sctpCapabilities || {}).numStreams
 				};
 
-				const transport = await this._mediasoupRouter.createWebRtcTransport(
-					{
-						...webRtcTransportOptions,
-						webRtcServer : this._webRtcServer
-					});
+				const transport =
+					await this._mediasoupRouter.createWebRtcTransport(webRtcTransportOptions);
 
 				// Store it.
 				broadcaster.data.transports.set(transport.id, transport);
@@ -489,7 +495,7 @@ class Room extends EventEmitter
 			{
 				const plainTransportOptions =
 				{
-					...config.mediasoup.plainTransportOptions,
+					...utils.clone(config.mediasoup.plainTransportOptions),
 					rtcpMux : rtcpMux,
 					comedia : comedia
 				};
@@ -980,23 +986,35 @@ class Room extends EventEmitter
 
 				const webRtcTransportOptions =
 				{
-					...config.mediasoup.webRtcTransportOptions,
-					enableSctp     : Boolean(sctpCapabilities),
-					numSctpStreams : (sctpCapabilities || {}).numStreams,
-					appData        : { producing, consuming }
+					...utils.clone(config.mediasoup.webRtcTransportOptions),
+					webRtcServer      : this._webRtcServer,
+					iceConsentTimeout : 20,
+					enableSctp        : Boolean(sctpCapabilities),
+					numSctpStreams    : (sctpCapabilities || {}).numStreams,
+					appData           : { producing, consuming }
 				};
 
 				if (forceTcp)
 				{
+					webRtcTransportOptions.listenInfos = webRtcTransportOptions.listenInfos
+						.filter((listenInfo) => listenInfo.protocol === 'tcp');
+
 					webRtcTransportOptions.enableUdp = false;
 					webRtcTransportOptions.enableTcp = true;
 				}
 
-				const transport = await this._mediasoupRouter.createWebRtcTransport(
+				const transport =
+					await this._mediasoupRouter.createWebRtcTransport(webRtcTransportOptions);
+
+				transport.on('icestatechange', (iceState) =>
+				{
+					if (iceState === 'disconnected' || iceState === 'closed')
 					{
-						...webRtcTransportOptions,
-						webRtcServer : this._webRtcServer
-					});
+						logger.warn('WebRtcTransport "icestatechange" event [iceState:%s], closing peer', iceState);
+
+						peer.close();
+					}
+				});
 
 				transport.on('sctpstatechange', (sctpState) =>
 				{
@@ -1006,7 +1024,11 @@ class Room extends EventEmitter
 				transport.on('dtlsstatechange', (dtlsState) =>
 				{
 					if (dtlsState === 'failed' || dtlsState === 'closed')
-						logger.warn('WebRtcTransport "dtlsstatechange" event [dtlsState:%s]', dtlsState);
+					{
+						logger.warn('WebRtcTransport "dtlsstatechange" event [dtlsState:%s], closing peer', dtlsState);
+
+						peer.close();
+					}
 				});
 
 				// NOTE: For testing.
@@ -1156,6 +1178,43 @@ class Room extends EventEmitter
 							producer
 						});
 				}
+
+				/* Test rtpjs lib. */
+
+				// const directTransport = await this._mediasoupRouter.createDirectTransport();
+
+				// directTransport.on('rtcp', (buffer) =>
+				// {
+				// 	const rtcpPacket =
+				// 		new rtp.packets.CompoundPacket(rtp.utils.nodeBufferToDataView(buffer));
+
+				// 	logger.info('RTCP packet');
+				// 	logger.info(rtcpPacket.dump());
+				// });
+
+				// const directConsumer = await directTransport.consume(
+				// 	{
+				// 		producerId      : producer.id,
+				// 		rtpCapabilities : this._mediasoupRouter.rtpCapabilities
+				// 	}
+				// );
+
+				// const directProducer = await directTransport.produce(
+				// 	{
+				// 		kind          : directConsumer.kind,
+				// 		rtpParameters : directConsumer.rtpParameters
+				// 	});
+
+				// directConsumer.on('rtp', (buffer) =>
+				// {
+				// 	const rtpPacket =
+				// 		new rtp.packets.RtpPacket(rtp.utils.nodeBufferToDataView(buffer));
+
+				// 	// logger.info('RTP packet');
+				// 	// logger.info(rtpPacket.dump());
+
+				// 	directProducer.send(buffer);
+				// });
 
 				// Add into the AudioLevelObserver and ActiveSpeakerObserver.
 				if (producer.kind === 'audio')
@@ -1642,7 +1701,8 @@ class Room extends EventEmitter
 		for (let i=0; i<consumerCount; i++)
 		{
 			promises.push(
-				(async () =>
+				// eslint-disable-next-line no-async-promise-executor
+				new Promise(async (resolve) =>
 				{
 					// Create the Consumer in paused mode.
 					let consumer;
@@ -1655,12 +1715,15 @@ class Room extends EventEmitter
 								rtpCapabilities : consumerPeer.data.rtpCapabilities,
 								// Enable NACK for OPUS.
 								enableRtx       : true,
-								paused          : true
+								paused          : true,
+								ignoreDtx       : true
 							});
 					}
 					catch (error)
 					{
 						logger.warn('_createConsumer() | transport.consume():%o', error);
+
+						resolve();
 
 						return;
 					}
@@ -1759,12 +1822,16 @@ class Room extends EventEmitter
 								score      : consumer.score
 							})
 							.catch(() => {});
+
+						resolve();
 					}
 					catch (error)
 					{
 						logger.warn('_createConsumer() | failed:%o', error);
+
+						resolve();
 					}
-				})()
+				})
 			);
 		}
 

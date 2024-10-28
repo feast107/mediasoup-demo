@@ -252,6 +252,9 @@ export default class RoomClient
 
 	async join()
 	{
+		store.dispatch(
+			stateActions.setMediasoupClientVersion(mediasoupClient.version));
+
 		const protooTransport = new protooClient.WebSocketTransport(this._protooUrl);
 
 		this._protoo = new protooClient.Peer(protooTransport);
@@ -603,6 +606,16 @@ export default class RoomClient
 
 			switch (notification.method)
 			{
+				case 'mediasoup-version':
+				{
+					const { version } = notification.data;
+
+					store.dispatch(
+						stateActions.setMediasoupVersion(version));
+
+					break;
+				}
+
 				case 'producerScore':
 				{
 					const { producerId, score } = notification.data;
@@ -2315,12 +2328,13 @@ export default class RoomClient
 					});
 
 				this._sendTransport.on(
-					'connect', ({ dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
+					'connect', ({ iceParameters, dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
 					{
 						this._protoo.request(
 							'connectWebRtcTransport',
 							{
 								transportId : this._sendTransport.id,
+								iceParameters,
 								dtlsParameters
 							})
 							.then(callback)
@@ -2429,12 +2443,13 @@ export default class RoomClient
 					});
 
 				this._recvTransport.on(
-					'connect', ({ dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
+					'connect', ({ iceParameters, dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
 					{
 						this._protoo.request(
 							'connectWebRtcTransport',
 							{
 								transportId : this._recvTransport.id,
+								iceParameters,
 								dtlsParameters
 							})
 							.then(callback)

@@ -54,8 +54,7 @@ module.exports =
 				'svc',
 				'sctp'
 			],
-			rtcMinPort : process.env.MEDIASOUP_MIN_PORT || 40000,
-			rtcMaxPort : process.env.MEDIASOUP_MAX_PORT || 49999
+			disableLiburing: false
 		},
 		// mediasoup Router options.
 		// See https://mediasoup.org/documentation/v3/mediasoup/api/#RouterOptions
@@ -124,16 +123,16 @@ module.exports =
 			listenInfos :
 			[
 				{
-					protocol    : 'udp',
-					ip          : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-					announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP,
-					port        : 44444
+					protocol         : 'udp',
+					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP,
+					port             : 44444
 				},
 				{
-					protocol    : 'tcp',
-					ip          : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-					announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP,
-					port        : 44444
+					protocol         : 'tcp',
+					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP,
+					port             : 44444
 				}
 			]
 		},
@@ -142,13 +141,29 @@ module.exports =
 		// See https://mediasoup.org/documentation/v3/mediasoup/api/#WebRtcTransportOptions
 		webRtcTransportOptions :
 		{
-			// listenIps is not needed since webRtcServer is used.
+			// listenInfos is not needed since webRtcServer is used.
 			// However passing MEDIASOUP_USE_WEBRTC_SERVER=false will change it.
-			listenIps :
+			listenInfos :
 			[
 				{
-					ip          : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-					announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP
+					protocol         : 'udp',
+					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP,
+					portRange        :
+					{
+						min : process.env.MEDIASOUP_MIN_PORT || 40000,
+						max : process.env.MEDIASOUP_MAX_PORT || 49999,
+					}
+				},
+				{
+					protocol         : 'tcp',
+					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP,
+					portRange        :
+					{
+						min : process.env.MEDIASOUP_MIN_PORT || 40000,
+						max : process.env.MEDIASOUP_MAX_PORT || 49999,
+					}
 				}
 			],
 			initialAvailableOutgoingBitrate : 1000000,
@@ -162,10 +177,16 @@ module.exports =
 		// See https://mediasoup.org/documentation/v3/mediasoup/api/#PlainTransportOptions
 		plainTransportOptions :
 		{
-			listenIp :
+			listenInfo :
 			{
-				ip          : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-				announcedIp : process.env.MEDIASOUP_ANNOUNCED_IP
+				protocol         : 'udp',
+				ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+				announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP,
+				portRange        :
+				{
+					min : process.env.MEDIASOUP_MIN_PORT || 40000,
+					max : process.env.MEDIASOUP_MAX_PORT || 49999,
+				}
 			},
 			maxSctpMessageSize : 262144
 		}

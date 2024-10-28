@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 function log_info() {
-	echo -e "\e[0;36m[run.sh] [INFO] $@\e[0m"
+	echo -e "\033[0;36m[run.sh] [INFO] $@\033[0m"
 }
 
 function log_error() {
-	echo -e "\e[1;31m[run.sh] [ERROR] $@\e[0m" 1>&2;
+	echo -e "\033[0;31m[run.sh] [ERROR] $@\033[0m" 1>&2;
 }
 
 function check_os() {
@@ -76,7 +76,7 @@ log_info "detected local IP: ${ip}"
 # Set env variables (don't override if already set).
 export DEBUG=${DEBUG:="mediasoup-demo-server:INFO* *WARN* *ERROR*"}
 export INTERACTIVE=${INTERACTIVE:="true"}
-export MEDIASOUP_ANNOUNCED_IP="${ip}"
+export MEDIASOUP_ANNOUNCED_IP=${MEDIASOUP_ANNOUNCED_IP:="${ip}"}
 
 log_info "running mediasoup-demo server.js with envs:"
 log_info "- DEBUG=${DEBUG}"
